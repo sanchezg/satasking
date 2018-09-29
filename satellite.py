@@ -25,12 +25,9 @@ class Satellite:
     def init_client(self):
         """Init instance and connect to specified server."""
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setblocking(False)
-        self.socket.connect_ex((self.host, self.port))
+        self.socket.connect((self.host, self.port))
         logger.info('Connected to {}'.format((self.host, self.port)))
-        # TODO: Still not working
-        # self.init_connection()
-        self.connected = True
+        self.init_connection()
 
     def init_connection(self):
         """Init a very simple protocol.
@@ -73,7 +70,7 @@ class Satellite:
         try:
             while self.connected:
                 # TODO: Still not working
-                # self.wait_for_command()
+                self.wait_for_command()
                 pass
         except KeyboardInterrupt:
             print('caught keyboard interrupt, exiting')

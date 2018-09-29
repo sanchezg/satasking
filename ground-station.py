@@ -8,7 +8,7 @@ import click
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 65265
 
-EXIT_MSG = b''
+EXIT_MSG = ''
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -42,10 +42,8 @@ class GroundStationHandler(BaseRequestHandler):
     def handle(self):
         logger.info("Accepted new client: {}".format(self.client_address))
         while(self.client_connected):
-            # TODO: Still not working
-            # message = self._read()
-            # self.process_message(message)
-            pass
+            message = self._read()
+            self.process_message(message)
 
     def disconnect_client(self):
         """Perform needed actions when a client is disconnected."""
@@ -55,13 +53,12 @@ class GroundStationHandler(BaseRequestHandler):
         logger.info("Updated clients list: {}".format(self.server.clients))
 
     def process_message(self, message):
-        """TODO: Will read received message and will make an appropriate response."""
+        """Read received message and make an appropriate response."""
         if message == EXIT_MSG:
             # Empty message, remove client from list
             self.disconnect_client()
-        elif message == b'hello':
-            self._write(b'world')
-        pass
+        elif message == 'hello':
+            self._write('world')
 
     def _write(self, message):
         """Write to socket peer (socket server) the specified `message`."""
