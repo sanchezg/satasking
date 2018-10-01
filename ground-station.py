@@ -58,7 +58,9 @@ class GroundStationHandler(BaseRequestHandler):
             # Empty message, remove client from list
             self.disconnect_client()
         elif message == 'hello':
+            # Simple handshake
             self._write('world')
+        return
 
     def _write(self, message):
         """Write to socket peer (socket server) the specified `message`."""

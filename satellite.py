@@ -9,13 +9,18 @@ import click
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 65265
 
-
 # Logger
 logger = logging.getLogger(__name__)
 
+# Messages
+MSG_OK = "ok"
+MSG_PING = "hello"
+MSG_PONG = "world"
+MSG_RESOURCES_PREFIX = "r:"
+
 
 class Satellite:
-    def __init__(self, host, port, *resources):
+    def __init__(self, host, port, resources):
         self.host = host
         self.port = port
         self.resources = resources
@@ -35,12 +40,31 @@ class Satellite:
         Init a very simple protocol to check connection and notice the server that this
         client is ready to receive commands.
         """
-        self.write('hello')
-        response = self.read()
-        if response == 'world':
+        if self.ping():
             self.connected = True
+            self.send_resources()
         else:
             logger.error("Can't connect to server, try again later.")
+        return
+
+    def ping(self):
+        """Send a ping to server and check response.
+
+        If response is OK return True, otherwise return False.
+        """
+        ping_ok = True
+        self.write(MSG_PING)
+        response = self.read()
+        if response != MSG_PONG:
+            ping_ok = False
+        return ping_ok
+
+    def send_resources(self):
+        """Communicate self resources to the server."""
+        self.write("{}{}".format(MSG_RESOURCES_PREFIX, self.resources))
+        response = self.read()
+        if response != MSG_OK:
+            logger.error("Can't send resources to server, exiting")
         return
 
     def write(self, message):
@@ -51,7 +75,8 @@ class Satellite:
     def read(self, count=1024):
         """Read and return `count` amount (max) from socket peer (server)."""
         response = str(self.socket.recv(count), self.encoding)
-        logger.info("Received message: {} from peer: {}".format(response, self.socket.getpeername()))
+        logger.info("Received message: {} from peer: {}".format(response,
+                                                                self.socket.getpeername()))
         return response
 
     def wait_for_command(self):
