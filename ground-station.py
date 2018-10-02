@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 
 import click
@@ -16,7 +18,13 @@ logger = logging.getLogger(__name__)
 
 class GroundStationServer(ThreadingMixIn, TCPServer):
     """Define the async behavior for our GroundStation socket server."""
-    pass
+
+    server_running = False
+
+    def service_actions(self):
+        """Set the inner variable `server_running` to True."""
+        self.server_running = True
+        super().service_actions()
 
 
 class GroundStationHandler(BaseRequestHandler):
@@ -78,11 +86,26 @@ class GroundStationHandler(BaseRequestHandler):
 @click.option('--host', default=DEFAULT_HOST, help='Host where the socket server will listen.')
 @click.option('--port', default=DEFAULT_PORT, help='Port where the socket server will listen.')
 def main(host, port):
-    with GroundStationServer((host, port), GroundStationHandler) as server:
-        # Activate the server; this will keep running until you
-        # interrupt the program with Ctrl-C
-        logger.info("Server running!")
-        server.serve_forever()
+    """Run app GroundStation and listen for user commands.
+
+    Init the GroundStation instance and dispatch it execution.
+
+    """
+    def wait_for_server():
+        while not server.server_running:
+            pass
+    server = GroundStationServer((host, port), GroundStationHandler)
+    th_server = threading.Thread(target=server.serve_forever)
+    th_server.start()
+    wait_for_server()
+    logger.info("Server running!")
+    try:
+        while(server.server_running):
+            time.sleep(0.5)
+    except (KeyboardInterrupt, SystemExit):
+        logger.info('Program aborted!')
+        server.shutdown()
+        th_server.join()
 
 
 if __name__ == '__main__':
