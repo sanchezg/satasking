@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from collections import defaultdict
 from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 
 import click
@@ -15,6 +16,12 @@ EXIT_MSG = ''
 # Logger
 logger = logging.getLogger(__name__)
 
+# Messages
+MSG_OK = "ok"
+MSG_PING = "hello"
+MSG_PONG = "world"
+MSG_RESOURCES_PREFIX = "::r:::"
+
 tasks = []
 
 
@@ -23,11 +30,44 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
 
     server_running = False
     tasks = []
+    res_avlb_by_clients = defaultdict(set)  # Indicates the resources that have available a client
+    clients = {}
 
     def service_actions(self):
         """Set the inner variable `server_running` to True."""
         self.server_running = True
         super().service_actions()
+
+    def update_resources(self, client, resources):
+        """Update inner `res_avlb_by_clients` dict."""
+        for res in resources:
+            self.res_avlb_by_clients[res].add(client)
+        logger.debug("Updated resources information: {}".format(self.res_avlb_by_clients))
+
+    def dispatch_tasks(self):
+        """Dispatch all registered tasks to be executed by the available clients."""
+        payoff_by_resources = [
+            # Keep idx of task in original list
+            (idx, float(t.payoff) / len(t.tasks)) for idx, t in enumerate(self.tasks)
+        ]
+        payoff_by_resources.sort(key=lambda x: x[1], reverse=True)
+
+        # TODO: ver esto
+        for idx, _ in payoff_by_resources:
+            task_resources = self.tasks[idx].resources  # task resources
+            clients_with_resources = set()
+            for tr in task_resources:
+                clients_with_resources &= self.res_avlb_by_clients[tr]
+            try:
+                candidate = clients_with_resources.pop()
+            except KeyError:
+                logger.error("There's no available client to process this task")
+            else:
+                # Remove resource available from client
+                for r in self.clients[candidate]['resources']:
+                    self.res_avlb_by_clients[r].remove(candidate)
+                # Delegate task to client
+                self.clients[candidate]['tasks'].append(self.tasks[idx])
 
 
 class GroundStationHandler(BaseRequestHandler):
@@ -40,12 +80,7 @@ class GroundStationHandler(BaseRequestHandler):
 
     def setup(self):
         """Append the connected client address to inner clients list."""
-        try:
-            # As the documentation states, this is called once before the handle method.
-            self.server.clients[self.client_address[1]] = self.client_address[0]
-        except AttributeError:
-            self.server.clients = {}
-            self.server.clients[self.client_address[1]] = self.client_address[0]
+        self.server.clients[self.client_address[1]] = self.client_address[0]
         self.client_connected = True
         logger.info("New client {}".format(self.client_address))
         logger.debug("Updated clients list: {}".format(self.server.clients))
@@ -65,12 +100,17 @@ class GroundStationHandler(BaseRequestHandler):
 
     def process_message(self, message):
         """Read received message and make an appropriate response."""
+        # import ipdb; ipdb.set_trace()
         if message == EXIT_MSG:
             # Empty message, remove client from list
             self.disconnect_client()
-        elif message == 'hello':
+        elif message == MSG_PING:
             # Simple handshake
-            self._write('world')
+            self._write(MSG_PONG)
+        elif MSG_RESOURCES_PREFIX in message:
+            resources_list = message.split(MSG_RESOURCES_PREFIX)[1].split()
+            logger.debug("delegate message with: {}".format(resources_list))
+            self.server.update_resources(self, resources_list)
         return
 
     def _write(self, message):
@@ -157,11 +197,9 @@ def main(host, port):
     """Run app GroundStation and listen for user commands.
 
     Init the GroundStation instance and dispatch it execution.
-
     """
     def wait_for_server():
         while not server.server_running:
-            # This shouldn't be done as in here
             pass
     server = GroundStationServer((host, port), GroundStationHandler)
     th_server = threading.Thread(target=server.serve_forever)

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MSG_OK = "ok"
 MSG_PING = "hello"
 MSG_PONG = "world"
-MSG_RESOURCES_PREFIX = "r:"
+MSG_RESOURCES_PREFIX = "::r::"
 
 
 class Satellite:
@@ -52,12 +52,9 @@ class Satellite:
 
         If response is OK return True, otherwise return False.
         """
-        ping_ok = True
         self.write(MSG_PING)
         response = self.read()
-        if response != MSG_PONG:
-            ping_ok = False
-        return ping_ok
+        return response == MSG_PONG
 
     def send_resources(self):
         """Communicate self resources to the server."""
