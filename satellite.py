@@ -58,7 +58,7 @@ class Satellite:
 
     def send_resources(self):
         """Communicate self resources to the server."""
-        self.write("{}{}".format(MSG_RESOURCES_PREFIX, self.resources))
+        self.write("{}{}".format(MSG_RESOURCES_PREFIX, ','.join(self.resources)))
         response = self.read()
         if response != MSG_OK:
             logger.error("Can't send resources to server, exiting")

@@ -1,3 +1,4 @@
+import ast
 import logging
 import threading
 import time
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 MSG_OK = "ok"
 MSG_PING = "hello"
 MSG_PONG = "world"
-MSG_RESOURCES_PREFIX = "::r:::"
+MSG_RESOURCES_PREFIX = "::r::"
 
 tasks = []
 
@@ -108,7 +109,7 @@ class GroundStationHandler(BaseRequestHandler):
             # Simple handshake
             self._write(MSG_PONG)
         elif MSG_RESOURCES_PREFIX in message:
-            resources_list = message.split(MSG_RESOURCES_PREFIX)[1].split()
+            resources_list = message.split(MSG_RESOURCES_PREFIX)[1].split(',')
             logger.debug("delegate message with: {}".format(resources_list))
             self.server.update_resources(self, resources_list)
         return
