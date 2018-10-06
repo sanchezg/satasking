@@ -8,6 +8,9 @@ from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 import click
 
 
+DEBUG = True
+
+
 # Settings
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 65265
@@ -22,6 +25,8 @@ MSG_OK = "ok"
 MSG_PING = "hello"
 MSG_PONG = "world"
 MSG_RESOURCES_PREFIX = "::r::"
+MSG_TASK_PREFIX = "::t::"
+MSG_SEPARATOR = "::"
 
 tasks = []
 
@@ -31,8 +36,8 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
 
     server_running = False
     tasks = []
-    res_avlb_by_clients = defaultdict(set)  # Indicates the resources that have available a client
-    clients = {}
+    resources_by_clients = defaultdict(set)  # Indicates the resources that have available a client
+    clients = defaultdict(dict)
 
     def service_actions(self):
         """Set the inner variable `server_running` to True."""
@@ -40,35 +45,65 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
         super().service_actions()
 
     def update_resources(self, client, resources):
-        """Update inner `res_avlb_by_clients` dict."""
+        """Update inner `resources_by_clients` dict."""
         for res in resources:
-            self.res_avlb_by_clients[res].add(client)
-        logger.debug("Updated resources information: {}".format(self.res_avlb_by_clients))
+            self.resources_by_clients[res].add(client)
+        self.clients[client]['resources'] = resources
+        self.clients[client]['tasks'] = []
+        logger.debug("Updated resources information: {}".format(self.resources_by_clients))
+        logger.debug("Updated clients information: {}".format(self.clients[client]))
 
     def dispatch_tasks(self):
-        """Dispatch all registered tasks to be executed by the available clients."""
+        """Dispatch all registered tasks to be executed by the available clients.
+
+        Use a kind of greedy choice to dispatch tasks to the clients with corresponding
+        resources available.
+        `payoff_by_resources` is a sorted list where the order is defined by `payoff/n_resources`
+        where `n_resources` is the amount of required resources by the task and `payoff` is the
+        payoff of the task.
+        First we choose to deliver the tasks with highest `payoff/n_resources` to lower ones.
+        Then we look for all clients with the required resources available, and choose the first
+        one as `candidate` to execute the task.
+        Then we must disassociate required resources with the candidate client.
+        As final step, we send a message to all clients with tasks that must execute addressed
+        tasks.
+        """
+        total_payoff = 0  # Total payoff to be executed
+        results = dict()  # dict with pair of 'task_name': 'satellite'
+
+        # Sort tasks to be processed to maximize payoff
         payoff_by_resources = [
             # Keep idx of task in original list
-            (idx, float(t.payoff) / len(t.tasks)) for idx, t in enumerate(self.tasks)
+            (idx, float(t.payoff) / len(t.resources)) for idx, t in enumerate(self.tasks)
         ]
         payoff_by_resources.sort(key=lambda x: x[1], reverse=True)
 
-        # TODO: ver esto
+        # import ipdb; ipdb.set_trace()
+        # Algorithm
         for idx, _ in payoff_by_resources:
             task_resources = self.tasks[idx].resources  # task resources
-            clients_with_resources = set()
+            clients_available = set([handler for handler in self.clients]) # Will address clients who can process this task
             for tr in task_resources:
-                clients_with_resources &= self.res_avlb_by_clients[tr]
+                clients_available &= self.resources_by_clients[tr]
             try:
-                candidate = clients_with_resources.pop()
+                candidate = clients_available.pop()
             except KeyError:
-                logger.error("There's no available client to process this task")
+                logger.error("There's no available client to process this task: {}"
+                             .format(self.tasks[idx].name))
             else:
                 # Remove resource available from client
-                for r in self.clients[candidate]['resources']:
-                    self.res_avlb_by_clients[r].remove(candidate)
+                for r in self.tasks[idx].resources:
+                    self.resources_by_clients[r].remove(candidate)
                 # Delegate task to client
+                results[self.tasks[idx].name] = candidate
+                total_payoff += self.tasks[idx].payoff
                 self.clients[candidate]['tasks'].append(self.tasks[idx])
+                candidate.new_task_available(self.tasks[idx])
+                self.tasks.pop(idx)
+        logger.debug("Results: {}".format(results))
+        logger.debug("Resources available: {}".format(self.resources_by_clients))
+        logger.debug("Total payoff: {}".format(total_payoff))
+        # return results, self.resources_by_clients, total_payoff
 
 
 class GroundStationHandler(BaseRequestHandler):
@@ -81,7 +116,7 @@ class GroundStationHandler(BaseRequestHandler):
 
     def setup(self):
         """Append the connected client address to inner clients list."""
-        self.server.clients[self.client_address[1]] = self.client_address[0]
+        self.server.clients[self]['address'] = (self.client_address[0], self.client_address[1])
         self.client_connected = True
         logger.info("New client {}".format(self.client_address))
         logger.debug("Updated clients list: {}".format(self.server.clients))
@@ -94,10 +129,16 @@ class GroundStationHandler(BaseRequestHandler):
 
     def disconnect_client(self):
         """Perform needed actions when a client is disconnected."""
-        del self.server.clients[self.client_address[1]]
+        del self.server.clients[self]
         self.client_connected = False
         logger.debug("Disconnected client: {}".format(self.client_address))
         logger.debug("Updated clients list: {}".format(self.server.clients))
+
+    def new_task_available(self, task):
+        """Called from the server when a new task is available for this client."""
+        message = "{n}{sep}{p}{sep}{r}".format(n=task.name, sep=MSG_SEPARATOR,
+                                               p=task.payoff, r=task.resources)
+        self._write("%s%s" % (MSG_TASK_PREFIX, message))
 
     def process_message(self, message):
         """Read received message and make an appropriate response."""
@@ -112,6 +153,7 @@ class GroundStationHandler(BaseRequestHandler):
             resources_list = message.split(MSG_RESOURCES_PREFIX)[1].split(',')
             logger.debug("delegate message with: {}".format(resources_list))
             self.server.update_resources(self, resources_list)
+            self._write(MSG_OK)
         return
 
     def _write(self, message):
@@ -126,12 +168,19 @@ class GroundStationHandler(BaseRequestHandler):
         return response
 
 
+class Satellite:
+
+    def __init__(self, name, resources):
+        self.name = name
+        self.resources = resources
+
+
 class Task:
     """Simple structure to represent a task."""
 
     def __init__(self, name, payoff, resources):
         self.name = name
-        self.payoff = payoff
+        self.payoff = int(payoff)
         self.resources = resources
 
     def __str__(self):
@@ -149,7 +198,7 @@ def create_task(*args):
     server_instance = args[0]
     name = input("Task name> ")
     payoff = input("Payoff> ")
-    resources = input("Resurces (separated by spaces)> ").split()
+    resources = input("Resources (separated by spaces)> ").split()
     t = Task(name, payoff, resources)
     server_instance.tasks.append(t)
     logger.debug("Task created: {}".format(t))
@@ -157,7 +206,8 @@ def create_task(*args):
 
 
 def dispatch_tasks(*args):
-    logger.error("Function not implemented yet!")
+    server_instance = args[0]
+    server_instance.dispatch_tasks()
 
 
 def show_tasks(*args):
@@ -191,6 +241,22 @@ def menu(server_instance):
         logger.warning("Error, bad option number!")
 
 
+def create_debug_tasks(server_instance):
+    tasks_def = {
+        't1': (['1', '2', '3', '5'], 150),
+        't2': (['1', '6', '3', '4'], 250),
+        't3': (['1', '2'], 50),
+        't4': (['2', '3', '6'], 100),
+        't5': (['2', '3', '5', '8'], 125),
+        't6': (['1', '2', '3', '4'], 450),
+    }
+    tasks = [
+        Task(k, v[1], v[0]) for k, v in tasks_def.items()
+    ]
+    server_instance.tasks += tasks
+    logger.debug("Created debug tasks")
+
+
 @click.command()
 @click.option('--host', default=DEFAULT_HOST, help='Host where the socket server will listen.')
 @click.option('--port', default=DEFAULT_PORT, help='Port where the socket server will listen.')
@@ -207,6 +273,8 @@ def main(host, port):
     th_server.start()
     wait_for_server()
     logger.info("Server running!")
+    if DEBUG:
+        create_debug_tasks(server)
     try:
         while(server.server_running):
             menu(server)

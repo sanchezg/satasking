@@ -1,3 +1,4 @@
+import ast
 import logging
 import selectors
 import socket
@@ -17,15 +18,19 @@ MSG_OK = "ok"
 MSG_PING = "hello"
 MSG_PONG = "world"
 MSG_RESOURCES_PREFIX = "::r::"
+MSG_TASK_PREFIX = "::t::"
+MSG_SEPARATOR = "::"
 
 
 class Satellite:
     def __init__(self, host, port, resources):
         self.host = host
         self.port = port
-        self.resources = resources
+        self.resources = resources  # Total resources
         self.connected = False
         self.encoding = 'utf-8'
+        self.available = [r for r in resources]  # Resources available
+        self.tasks = {}
 
     def init_client(self):
         """Init instance and connect to specified server."""
@@ -79,12 +84,25 @@ class Satellite:
     def wait_for_command(self):
         """Wait until receives a new message from peer and process it as a command."""
         message = self.read()
+        # import ipdb; ipdb.set_trace()
         self.process_message(message)
 
     def process_message(self, message):
         """Process incoming message from peer, and call the proper action."""
-        # TODO
-        pass
+        if MSG_TASK_PREFIX in message:
+            task_message = message.split(MSG_TASK_PREFIX)[1]
+            task_name, task_payoff, task_resources = task_message.split(MSG_SEPARATOR)
+            task_resources = ast.literal_eval(task_resources)
+            self.execute_task(task_name, task_payoff, task_resources)
+        return
+
+    def execute_task(self, name, payoff, resources):
+        """."""
+        self.tasks[name] = (payoff, resources)
+        for res in resources:
+            self.available.remove(res)
+        logger.debug("Executing task '{}' with payoff '{}'".format(name, payoff))
+        logger.debug("Available resources: {}".format(self.available))
 
     def run(self):
         if not self.connected:
