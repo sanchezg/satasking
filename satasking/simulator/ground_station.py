@@ -1,34 +1,12 @@
-import ast
 import logging
-import threading
-import time
 from collections import defaultdict
 from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 
-import click
-
-
-DEBUG = True
-
-
-# Settings
-DEFAULT_HOST = '127.0.0.1'
-DEFAULT_PORT = 65265
-
-EXIT_MSG = ''
+from simulator.messages import (MSG_NULL, MSG_OK, MSG_PING, MSG_PONG, MSG_RESOURCES_PREFIX,
+                                MSG_SEPARATOR, MSG_TASK_PREFIX)
 
 # Logger
 logger = logging.getLogger(__name__)
-
-# Messages
-MSG_OK = "ok"
-MSG_PING = "hello"
-MSG_PONG = "world"
-MSG_RESOURCES_PREFIX = "::r::"
-MSG_TASK_PREFIX = "::t::"
-MSG_SEPARATOR = "::"
-
-tasks = []
 
 
 class GroundStationServer(ThreadingMixIn, TCPServer):
@@ -38,6 +16,11 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
     tasks = []
     resources_by_clients = defaultdict(set)  # Indicates the resources that have available a client
     clients = defaultdict(dict)
+
+    def __init__(self, host, port):
+        """Init a SocketServer with `GroundStationHandler`."""
+        logger.info("Server running!")
+        super().__init__((host, port), GroundStationHandler)
 
     def service_actions(self):
         """Set the inner variable `server_running` to True."""
@@ -53,7 +36,7 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
         logger.debug("Updated resources information: {}".format(self.resources_by_clients))
         logger.debug("Updated clients information: {}".format(self.clients[client]))
 
-    def dispatch_tasks(self):
+    def dispatch_tasks(self, tasks):
         """Dispatch all registered tasks to be executed by the available clients.
 
         Use a kind of greedy choice to dispatch tasks to the clients with corresponding
@@ -74,14 +57,13 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
         # Sort tasks to be processed to maximize payoff
         payoff_by_resources = [
             # Keep idx of task in original list
-            (idx, float(t.payoff) / len(t.resources)) for idx, t in enumerate(self.tasks)
+            (idx, float(t.payoff) / len(t.resources)) for idx, t in enumerate(tasks)
         ]
         payoff_by_resources.sort(key=lambda x: x[1], reverse=True)
 
-        # import ipdb; ipdb.set_trace()
         # Algorithm
         for idx, _ in payoff_by_resources:
-            task_resources = self.tasks[idx].resources  # task resources
+            task_resources = tasks[idx].resources.split(',')  # task resources
             clients_available = set([handler for handler in self.clients]) # Will address clients who can process this task
             for tr in task_resources:
                 clients_available &= self.resources_by_clients[tr]
@@ -89,21 +71,20 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
                 candidate = clients_available.pop()
             except KeyError:
                 logger.error("There's no available client to process this task: {}"
-                             .format(self.tasks[idx].name))
+                             .format(tasks[idx].name))
             else:
                 # Remove resource available from client
-                for r in self.tasks[idx].resources:
+                for r in task_resources:
                     self.resources_by_clients[r].remove(candidate)
                 # Delegate task to client
-                results[self.tasks[idx].name] = candidate
-                total_payoff += self.tasks[idx].payoff
-                self.clients[candidate]['tasks'].append(self.tasks[idx])
-                candidate.new_task_available(self.tasks[idx])
-                self.tasks.pop(idx)
+                results[tasks[idx].name] = candidate
+                total_payoff += tasks[idx].payoff
+                self.clients[candidate]['tasks'].append(tasks[idx])
+                candidate.new_task_available(tasks[idx])
+                tasks.pop(idx)
         logger.debug("Results: {}".format(results))
         logger.debug("Resources available: {}".format(self.resources_by_clients))
         logger.debug("Total payoff: {}".format(total_payoff))
-        # return results, self.resources_by_clients, total_payoff
 
 
 class GroundStationHandler(BaseRequestHandler):
@@ -142,8 +123,7 @@ class GroundStationHandler(BaseRequestHandler):
 
     def process_message(self, message):
         """Read received message and make an appropriate response."""
-        # import ipdb; ipdb.set_trace()
-        if message == EXIT_MSG:
+        if message == MSG_NULL:
             # Empty message, remove client from list
             self.disconnect_client()
         elif message == MSG_PING:
@@ -166,127 +146,3 @@ class GroundStationHandler(BaseRequestHandler):
         response = str(self.request.recv(count), 'utf-8')
         logger.debug("Received message: {} from peer: {}".format(response, self.client_address))
         return response
-
-
-class Satellite:
-
-    def __init__(self, name, resources):
-        self.name = name
-        self.resources = resources
-
-
-class Task:
-    """Simple structure to represent a task."""
-
-    def __init__(self, name, payoff, resources):
-        self.name = name
-        self.payoff = int(payoff)
-        self.resources = resources
-
-    def __str__(self):
-        args = {
-            'name': self.name,
-            'payoff': self.payoff,
-            'resources': self.resources
-        }
-        return "Task(name={name}, payoff={payoff}, resources={resources})"\
-               .format(**args)
-
-
-def create_task(*args):
-    """Create a task and appends to server tasks."""
-    server_instance = args[0]
-    name = input("Task name> ")
-    payoff = input("Payoff> ")
-    resources = input("Resources (separated by spaces)> ").split()
-    t = Task(name, payoff, resources)
-    server_instance.tasks.append(t)
-    logger.debug("Task created: {}".format(t))
-    return
-
-
-def dispatch_tasks(*args):
-    server_instance = args[0]
-    server_instance.dispatch_tasks()
-
-
-def show_tasks(*args):
-    """Show tasks created."""
-    server_instance = args[0]
-
-    for task in server_instance.tasks:
-        print(task)
-
-
-def menu(server_instance):
-    """Print in console the interactive menu and call proper action."""
-    print(
-        "\n"
-        "1. Insert new task\n"
-        "2. Dispatch tasks to satellites\n"
-        "3. Show tasks\n"
-        "4. Exit program\n"
-    )
-    
-    options = {
-        '1': create_task,
-        '2': dispatch_tasks,
-        '3': show_tasks,
-        '4': exit
-    }
-    option = input("Choose option number> ")
-    try:
-        options[option](server_instance)
-    except KeyError:
-        logger.warning("Error, bad option number!")
-
-
-def create_debug_tasks(server_instance):
-    tasks_def = {
-        't1': (['1', '2', '3', '5'], 150),
-        't2': (['1', '6', '3', '4'], 250),
-        't3': (['1', '2'], 50),
-        't4': (['2', '3', '6'], 100),
-        't5': (['2', '3', '5', '8'], 125),
-        't6': (['1', '2', '3', '4'], 450),
-    }
-    tasks = [
-        Task(k, v[1], v[0]) for k, v in tasks_def.items()
-    ]
-    server_instance.tasks += tasks
-    logger.debug("Created debug tasks")
-
-
-@click.command()
-@click.option('--host', default=DEFAULT_HOST, help='Host where the socket server will listen.')
-@click.option('--port', default=DEFAULT_PORT, help='Port where the socket server will listen.')
-def main(host, port):
-    """Run app GroundStation and listen for user commands.
-
-    Init the GroundStation instance and dispatch it execution.
-    """
-    def wait_for_server():
-        while not server.server_running:
-            pass
-    server = GroundStationServer((host, port), GroundStationHandler)
-    th_server = threading.Thread(target=server.serve_forever)
-    th_server.start()
-    wait_for_server()
-    logger.info("Server running!")
-    if DEBUG:
-        create_debug_tasks(server)
-    try:
-        while(server.server_running):
-            menu(server)
-            time.sleep(0.5)
-    except (KeyboardInterrupt, SystemExit):
-        logger.info('Program aborted!')
-        server.shutdown()
-        th_server.join()
-
-
-if __name__ == '__main__':
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
-    main()
