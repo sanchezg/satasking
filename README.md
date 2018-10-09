@@ -21,13 +21,13 @@ For better results, use [pyenv](https://github.com/pyenv/pyenv) and [virtualenv]
 1. Configure the backend settings by running migrations:
 
 ```
-  satasking/simulator/ $ python manage.py migrate
+  satasking/ $ python manage.py migrate
 ```
 
 2. Create a user:
 
 ```
-  satasking/simulator/ $ python manage.py createsuperuser
+  satasking/ $ python manage.py createsuperuser
 ```
 
 # Using guide
@@ -35,7 +35,7 @@ For better results, use [pyenv](https://github.com/pyenv/pyenv) and [virtualenv]
 1. Run the django web server with:
 
 ```
-  satasking/simulator/ $ python manage.py runserver
+  satasking/ $ python manage.py runserver
 ```
 
 This will run the project under `http://localhost:8000/`
