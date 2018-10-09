@@ -2,6 +2,8 @@ import logging
 from collections import defaultdict
 from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 
+from django.conf import settings
+
 from simulator.messages import (MSG_ENCODING, MSG_NULL, MSG_OK, MSG_PING, MSG_PONG,
                                 MSG_RESOURCES_PREFIX, MSG_SEPARATOR, MSG_TASK_PREFIX)
 
@@ -19,8 +21,12 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
 
     def __init__(self, host, port):
         """Init a SocketServer with `GroundStationHandler`."""
-        logger.info("Server running!")
         super().__init__((host, port), GroundStationHandler)
+        if settings.DEBUG:
+            logger.setLevel(logging.DEBUG)
+            handler = logging.StreamHandler()
+            logger.addHandler(handler)
+            logger.debug("Server up and running!")
 
     def service_actions(self):
         """Set the inner variable `server_running` to True."""
@@ -64,7 +70,7 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
         # Algorithm
         for idx, _ in payoff_by_resources:
             task_resources = tasks[idx].resources.split(',')  # task resources
-            clients_available = set([handler for handler in self.clients]) # Will address clients who can process this task
+            clients_available = set([handler for handler in self.clients])  # TODO: Can be improved
             for tr in task_resources:
                 clients_available &= self.resources_by_clients[tr]
             try:
@@ -81,7 +87,6 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
                 total_payoff += tasks[idx].payoff
                 self.clients[candidate]['tasks'].append(tasks[idx])
                 candidate.new_task_available(tasks[idx])
-                tasks.pop(idx)
         logger.debug("Results: {}".format(results))
         logger.debug("Resources available: {}".format(self.resources_by_clients))
         logger.debug("Total payoff: {}".format(total_payoff))
