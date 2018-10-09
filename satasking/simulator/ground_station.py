@@ -2,8 +2,8 @@ import logging
 from collections import defaultdict
 from socketserver import BaseRequestHandler, TCPServer, ThreadingMixIn
 
-from simulator.messages import (MSG_NULL, MSG_OK, MSG_PING, MSG_PONG, MSG_RESOURCES_PREFIX,
-                                MSG_SEPARATOR, MSG_TASK_PREFIX)
+from simulator.messages import (MSG_ENCODING, MSG_NULL, MSG_OK, MSG_PING, MSG_PONG,
+                                MSG_RESOURCES_PREFIX, MSG_SEPARATOR, MSG_TASK_PREFIX)
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -138,11 +138,11 @@ class GroundStationHandler(BaseRequestHandler):
 
     def _write(self, message):
         """Write to socket peer (socket server) the specified `message`."""
-        self.request.sendall(bytes(message, 'utf-8'))
+        self.request.sendall(bytes(message, MSG_ENCODING))
         logger.debug("Sent message: {} to peer: {}".format(message, self.client_address))
 
     def _read(self, count=1024):
         """Read and return `count` amount (max) from socket peer (server)."""
-        response = str(self.request.recv(count), 'utf-8')
+        response = str(self.request.recv(count), MSG_ENCODING)
         logger.debug("Received message: {} from peer: {}".format(response, self.client_address))
         return response

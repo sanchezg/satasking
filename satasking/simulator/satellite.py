@@ -1,32 +1,19 @@
 import ast
 import logging
-import selectors
 import socket
 
-import click
-
-
-# Settings
-DEFAULT_HOST = '127.0.0.1'
-DEFAULT_PORT = 65265
+from simulator.messages import (MSG_ENCODING, MSG_DISCONNECT, MSG_OK, MSG_PING, MSG_PONG,
+                                MSG_RESOURCES_PREFIX, MSG_SEPARATOR, MSG_TASK_PREFIX)
 
 # Logger
 logger = logging.getLogger(__name__)
 
-# Messages
-MSG_OK = "ok"
-MSG_PING = "hello"
-MSG_PONG = "world"
-MSG_RESOURCES_PREFIX = "::r::"
-MSG_TASK_PREFIX = "::t::"
-MSG_SEPARATOR = "::"
 
-
-class Satellite:
+class SatelliteClient:
     def __init__(self, host, port, resources):
         self.host = host
         self.port = port
-        self.resources = resources  # Total resources
+        self.resources = resources.split(',')  # Total resources
         self.connected = False
         self.encoding = 'utf-8'
         self.available = [r for r in resources]  # Resources available
@@ -115,19 +102,7 @@ class Satellite:
         except KeyboardInterrupt:
             print('caught keyboard interrupt, exiting')
 
-
-@click.command()
-@click.option('--host', default=DEFAULT_HOST, help='Host where the socket server will listen.')
-@click.option('--port', default=DEFAULT_PORT, help='Port where the socket server will listen.')
-@click.option('--resources', '-r', multiple=True,
-              help='Resource id that this satellite will handle.')
-def main(host, port, resources):
-    sate = Satellite(host, port, resources)
-    sate.run()
-
-
-if __name__ == '__main__':
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
-    main()
+    def stop(self):
+        """Stop and close current socket. Clean used resources."""
+        self.write(MSG_DISCONNECT)
+        self.socket.close()

@@ -1,5 +1,9 @@
 
+# Basic configuration
+MSG_ENCODING = 'utf-8'
+
 # Messages
+MSG_DISCONNECT = 'goodbye'
 MSG_NULL = ''
 MSG_OK = "ok"
 MSG_PING = "hello"
