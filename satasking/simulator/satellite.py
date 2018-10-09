@@ -2,6 +2,8 @@ import ast
 import logging
 import socket
 
+from django.conf import settings
+
 from simulator.messages import (MSG_ENCODING, MSG_DISCONNECT, MSG_OK, MSG_PING, MSG_PONG,
                                 MSG_RESOURCES_PREFIX, MSG_SEPARATOR, MSG_TASK_PREFIX)
 
@@ -18,6 +20,10 @@ class SatelliteClient:
         self.encoding = 'utf-8'
         self.available = [r for r in resources]  # Resources available
         self.tasks = {}
+        if settings.DEBUG:
+            logger.setLevel(logging.DEBUG)
+            handler = logging.StreamHandler()
+            logger.addHandler(handler)
 
     def init_client(self):
         """Init instance and connect to specified server."""
