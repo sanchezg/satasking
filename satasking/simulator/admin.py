@@ -18,20 +18,20 @@ stop_ground_station.short_description = "Stop selected GroundStation"
 def run_satellite(modeladmin, request, queryset):
     for sat in queryset:
         sat.run()
-run_satellite.short_description = "Run selected Satellites."
+run_satellite.short_description = "Run selected satellites"
 
 
 def stop_satellite(modeladmin, request, queryset):
     for sat in queryset:
         sat.stop()
-stop_satellite.short_description = "Stop selected Satellites."
+stop_satellite.short_description = "Stop selected satellites"
 
 
 def dispatch_tasks(modeladmin, request, queryset):
-    tasks = queryset.to_dict()
-    gs = GroundStation.queryset.first()
+    tasks = list(queryset)
+    gs = GroundStation.objects.first()
     gs.dispatch_tasks(tasks)
-dispatch_tasks.short_description = "Dispatch selected tasks to be executed."
+dispatch_tasks.short_description = "Dispatch selected tasks to satellites"
 
 
 class GroundStationAdmin(admin.ModelAdmin):
@@ -46,6 +46,7 @@ class SatelliteAdmin(admin.ModelAdmin):
 
 class TaskAdmin(admin.ModelAdmin):
     actions = [dispatch_tasks]
+    list_display = ['name', 'payoff', 'resources']
 
 
 admin.site.register(GroundStation, GroundStationAdmin)
