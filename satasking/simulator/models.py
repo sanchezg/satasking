@@ -68,7 +68,12 @@ class GroundStation(SingletonModel):
     def dispatch_tasks(self, tasks):
         """Call the dispatch _tasks method from SocketServer with desired tasks to dispatch to
         clients."""
-        settings.SERVER.dispatch_tasks(tasks)
+        dispatched = settings.SERVER.dispatch_tasks(tasks)
+        for task, sat in dispatched.items():
+            TaskExecution.objects.create(
+                task_id=Task.objects.get(name=task).id,
+                satellite_id=Satellite.objects.get(name=sat).id
+            )
 
 
 class Satellite(models.Model):
@@ -88,7 +93,7 @@ class Satellite(models.Model):
             logger.error("Currently Satellite seems to be already running."\
                          "If not, please try to stop it.")
             return
-        sate = SatelliteClient(self.hostname, self.port, self.resources)
+        sate = SatelliteClient(self.hostname, self.port, self.resources, self.name)
         th_satellite = threading.Thread(target=sate.run)
         settings.SATELLITES[self.name] = (sate, th_satellite)
         self.running = True
@@ -114,6 +119,7 @@ class Task(models.Model):
     payoff = models.PositiveIntegerField(help_text="Task payoff")
     resources = models.CharField(max_length=settings.MAX_CHAR_LENGTH,
                                  help_text="Comma separated resources ids.")
+    runner = models.ManyToManyField(Satellite, through='TaskExecution')
 
     def __repr__(self):
         args = {
@@ -123,3 +129,10 @@ class Task(models.Model):
         }
         return "Task(name={name}, payoff={payoff}, resources={resources})"\
                .format(**args)
+
+
+class TaskExecution(models.Model):
+    """Intermediate table, represents the execution of a task by a client."""
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    satellite = models.ForeignKey(Satellite, on_delete=models.CASCADE)
+    date_time = models.DateTimeField(auto_now_add=True)

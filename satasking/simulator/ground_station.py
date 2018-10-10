@@ -34,12 +34,13 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
         self.server_running = True
         super().service_actions()
 
-    def update_resources(self, client, resources):
+    def update_resources(self, client, resources, name):
         """Update inner `resources_by_clients` dict."""
         for res in resources:
             self.resources_by_clients[res].add(client)
         self.clients[client]['resources'] = resources
         self.clients[client]['tasks'] = []
+        self.clients[client]['name'] = name
         logger.debug("Updated resources information: {}".format(self.resources_by_clients))
         logger.debug("Updated clients information: {}".format(self.clients[client]))
 
@@ -84,13 +85,14 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
                 for r in task_resources:
                     self.resources_by_clients[r].remove(candidate)
                 # Delegate task to client
-                results[tasks[idx].name] = candidate
+                results[tasks[idx].name] = self.clients[candidate]['name']
                 total_payoff += tasks[idx].payoff
                 self.clients[candidate]['tasks'].append(tasks[idx])
                 candidate.new_task_available(tasks[idx])
         logger.debug("Results: {}".format(results))
         logger.debug("Resources available: {}".format(self.resources_by_clients))
         logger.debug("Total payoff: {}".format(total_payoff))
+        return results
 
 
 class GroundStationHandler(BaseRequestHandler):
@@ -136,9 +138,11 @@ class GroundStationHandler(BaseRequestHandler):
             # Simple handshake
             self._write(MSG_PONG)
         elif MSG_RESOURCES_PREFIX in message:
-            resources_list = message.split(MSG_RESOURCES_PREFIX)[1].split(',')
+            msg_payload = message.split(MSG_RESOURCES_PREFIX)[1]
+            resources_list, name = msg_payload.split(MSG_SEPARATOR)
+            resources_list = resources_list.split(',')
             logger.debug("delegate message with: {}".format(resources_list))
-            self.server.update_resources(self, resources_list)
+            self.server.update_resources(self, resources_list, name)
             self._write(MSG_OK)
         return
 

@@ -24,7 +24,8 @@ def random_dice_execution():
 
 
 class SatelliteClient:
-    def __init__(self, host, port, resources):
+    def __init__(self, host, port, resources, name):
+        self.name = name
         self.host = host
         self.port = port
         self.resources = resources.split(',')  # Total resources
@@ -67,8 +68,10 @@ class SatelliteClient:
         return response == MSG_PONG
 
     def send_resources(self):
-        """Communicate self resources to the server."""
-        self.write("{}{}".format(MSG_RESOURCES_PREFIX, ','.join(self.resources)))
+        """Communicate self resources and name to the server."""
+        self.write("{}{}{}{}".format(
+            MSG_RESOURCES_PREFIX, ','.join(self.resources),
+            MSG_SEPARATOR, self.name))
         response = self.read()
         if response != MSG_OK:
             logger.error("Can't send resources to server, exiting")
@@ -101,6 +104,7 @@ class SatelliteClient:
                 self.execute_task(task_name, task_payoff, task_resources)
             else:
                 logger.error("Couldn't execute task %s, unrecognized error" % task_name)
+                # TODO: Notice the server that the task couldn't be executed
         return
 
     def execute_task(self, name, payoff, resources):
