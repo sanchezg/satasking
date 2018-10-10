@@ -91,7 +91,6 @@ class Satellite(models.Model):
         sate = SatelliteClient(self.hostname, self.port, self.resources)
         th_satellite = threading.Thread(target=sate.run)
         settings.SATELLITES[self.name] = (sate, th_satellite)
-        # import ipdb; ipdb.set_trace()
         self.running = True
         self.save()
         th_satellite.start()

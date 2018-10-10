@@ -9,6 +9,7 @@ from simulator.messages import (MSG_ENCODING, MSG_NULL, MSG_OK, MSG_PING, MSG_PO
 
 # Logger
 logger = logging.getLogger(__name__)
+logging.config.dictConfig(settings.LOGGING)
 
 
 class GroundStationServer(ThreadingMixIn, TCPServer):
@@ -74,7 +75,7 @@ class GroundStationServer(ThreadingMixIn, TCPServer):
             for tr in task_resources:
                 clients_available &= self.resources_by_clients[tr]
             try:
-                candidate = clients_available.pop()
+                candidate = clients_available.pop()  # TODO: Choose client by resources available
             except KeyError:
                 logger.error("There's no available client to process this task: {}"
                              .format(tasks[idx].name))
