@@ -52,6 +52,9 @@ class GroundStationServerTestCase(TestCase):
         for c in gss.clients:
             self.assertListEqual(gss.clients[c]['tasks'], [])
         gss.dispatch_tasks([self.t1, self.t2, self.t3])
+        # Check that correct tasks were assigned
+        client_id1.new_task_available.assert_called_with(self.t1)
+        client_id2.new_task_available.assert_called_with(self.t2)
         self.assertListEqual(gss.clients[client_id1]['tasks'], [self.t1])
         self.assertListEqual(gss.clients[client_id2]['tasks'], [self.t2])
 
@@ -69,9 +72,8 @@ class GroundStationServerTestCase(TestCase):
         gss = GroundStationServer(settings.DEFAULT_SERVER_HOSTNAME, settings.DEFAULT_SERVER_PORT)
         gss.update_resources(client_id1, client_resources1)
         gss.update_resources(client_id2, client_resources2)
-        # First check that clients havent tasks assigned
-        gss.dispatch_tasks([self.t1, self.t2, self.t3])
 
+        gss.dispatch_tasks([self.t1, self.t2, self.t3])
         for res in gss.resources_by_clients:
             if res in client_resources1 and res not in self.t1.resources.split(','):
                     self.assertIn(client_id1, gss.resources_by_clients[res])

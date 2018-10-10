@@ -42,6 +42,7 @@ class GroundStationModelTestCase(TestCase):
                 gs.run()  # This call should print a log message
                 self.assertEqual(th_mock.call_count, 0)  # Here th_mock differs from previous mock
 
+
 class SatelliteModelTestCase(TestCase):
     def setUp(self):
         settings.SATELLITES = {}
