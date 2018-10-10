@@ -1,5 +1,6 @@
 import ast
 import logging
+import random
 import socket
 
 from django.conf import settings
@@ -10,6 +11,16 @@ from simulator.messages import (MSG_ENCODING, MSG_DISCONNECT, MSG_OK, MSG_PING, 
 # Logger
 logger = logging.getLogger(__name__)
 logging.config.dictConfig(settings.LOGGING)
+
+random.seed(42)
+
+
+def random_dice_execution():
+    """Generate a random response if a task could be executed.
+
+    Return `False` only 10% of time.
+    """
+    return random.choices([True, False], weights=[9, 1], k=1)[0]
 
 
 class SatelliteClient:
@@ -86,7 +97,10 @@ class SatelliteClient:
             task_message = message.split(MSG_TASK_PREFIX)[1]
             task_name, task_payoff, task_resources = task_message.split(MSG_SEPARATOR)
             task_resources = [str(x) for x in ast.literal_eval(task_resources)]
-            self.execute_task(task_name, task_payoff, task_resources)
+            if random_dice_execution():
+                self.execute_task(task_name, task_payoff, task_resources)
+            else:
+                logger.error("Couldn't execute task %s, unrecognized error" % task_name)
         return
 
     def execute_task(self, name, payoff, resources):
