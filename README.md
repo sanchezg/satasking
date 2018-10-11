@@ -45,6 +45,11 @@ For better results, use [pyenv](https://github.com/pyenv/pyenv) and [virtualenv]
   satasking/ $ python manage.py test
 ```
 
+4. (Optional) Populate DB with fake data with:
+```
+  satasking/ $ python load_data.py
+```
+
 # Using guide
 
 1. Run the django web server with:
