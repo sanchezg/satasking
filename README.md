@@ -40,6 +40,11 @@ For better results, use [pyenv](https://github.com/pyenv/pyenv) and [virtualenv]
   satasking/ $ python manage.py createsuperuser
 ```
 
+3. Run the tests with:
+```
+  satasking/ $ python manage.py test
+```
+
 # Using guide
 
 1. Run the django web server with:
