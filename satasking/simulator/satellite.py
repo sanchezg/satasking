@@ -42,7 +42,7 @@ class SatelliteClient:
         """Init instance and connect to specified server."""
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.host, self.port))
-        logger.info('Connected to {}'.format((self.host, self.port)))
+        logger.info('[{}] Connected to {}'.format(self.name, (self.host, self.port)))
         self.init_connection()
 
     def init_connection(self):
@@ -80,13 +80,14 @@ class SatelliteClient:
     def write(self, message):
         """Write to socket peer (socket server) the specified `message`."""
         self.socket.sendall(bytes(message, self.encoding))
-        logger.info("Sent message: {} to peer: {}".format(message, self.socket.getpeername()))
+        logger.info("[{}] Sent message: {} to peer: {}".format(
+            self.name, message, self.socket.getpeername()))
 
     def read(self, count=1024):
         """Read and return `count` amount (max) from socket peer (server)."""
         response = str(self.socket.recv(count), self.encoding)
-        logger.info("Received message: {} from peer: {}".format(response,
-                                                                self.socket.getpeername()))
+        logger.info("[{}] Received message: {} from peer: {}".format(
+            self.name, response, self.socket.getpeername()))
         return response
 
     def wait_for_command(self):
@@ -99,7 +100,11 @@ class SatelliteClient:
         if MSG_TASK_PREFIX in message:
             task_message = message.split(MSG_TASK_PREFIX)[1]
             task_name, task_payoff, task_resources = task_message.split(MSG_SEPARATOR)
-            task_resources = [str(x) for x in ast.literal_eval(task_resources)]
+            try:
+                task_resources = [str(x) for x in ast.literal_eval(task_resources)]
+            except TypeError:
+                # task_resources is only one resource, so use as is
+                task_resources = [task_resources]
             if random_dice_execution():
                 self.execute_task(task_name, task_payoff, task_resources)
             else:
@@ -117,8 +122,8 @@ class SatelliteClient:
         for res in resources:
             self.available.remove(res)
         # TODO: Notice server with available resources
-        logger.debug("Executing task '{}' with payoff '{}'".format(name, payoff))
-        logger.debug("Available resources: {}".format(self.available))
+        logger.debug("[{}] Executing task '{}' with payoff '{}'".format(self.name, name, payoff))
+        logger.debug("[{}] Available resources: {}".format(self.name, self.available))
 
     def run(self):
         if not self.connected:
